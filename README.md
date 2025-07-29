@@ -65,16 +65,6 @@ The agent uses **LangGraph** to create an intelligent workflow that:
    pip install -r requirements.txt
    ```
 
-3. **Configure environment variables**
-   ```bash
-   # Create a development environment file
-   touch .env.dev
-   # Add your NewsData.io API key
-   echo "THENEWSAPI_TOKEN=your_api_key_here" >> .env.dev
-   # (Optional) Copy to .env for production
-   cp .env.dev .env
-   ```
-
 4. **Run the application**
    
    **Option A: Run both services separately**
