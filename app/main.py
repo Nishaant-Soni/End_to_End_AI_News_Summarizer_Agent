@@ -12,7 +12,7 @@ from .agent import NewsAgent
 from .utils.pdf_generator import PDFGenerator
 
 # Load environment variables
-load_dotenv(".env.dev")
+load_dotenv()
 
 # Initialize FastAPI app
 app = FastAPI(
