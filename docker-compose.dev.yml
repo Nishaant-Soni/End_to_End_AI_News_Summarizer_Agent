@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  news-summarizer-dev:
+    build: .
+    container_name: news-summarizer-dev
+    ports:
+      - "8000:8000"  # FastAPI backend
+      - "8501:8501"  # Streamlit frontend
+    environment:
+      - NEWSDATA_API_KEY=${NEWSDATA_API_KEY}
+      - MODEL_NAME=${MODEL_NAME:-facebook/bart-large-cnn}
+      - CACHE_DIR=${CACHE_DIR:-./cache}
+      - HOST=${HOST:-0.0.0.0}
+      - PORT=${PORT:-8000}
+      - CACHE_TTL=${CACHE_TTL:-3600}
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ./app:/app/app  # Mount app directory for hot reloading
+      - ./frontend:/app/frontend  # Mount frontend directory for hot reloading
+      - ./cache:/app/cache  # Persist cache
+      - ./logs:/app/logs    # Mount logs directory
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - news-network-dev
+
+networks:
+  news-network-dev:
+    driver: bridge
+
+volumes:
+  cache:
+    driver: local
+  logs:
+    driver: local 

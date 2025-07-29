@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  news-summarizer:
+    build: .
+    container_name: news-summarizer-agent
+    ports:
+      - "8000:8000"  # FastAPI backend
+      - "8501:8501"  # Streamlit frontend
+    environment:
+      - NEWSDATA_API_KEY=${NEWSDATA_API_KEY}
+      - MODEL_NAME=${MODEL_NAME:-facebook/bart-large-cnn}
+      - CACHE_DIR=${CACHE_DIR:-./cache}
+      - HOST=${HOST:-0.0.0.0}
+      - PORT=${PORT:-8000}
+      - CACHE_TTL=${CACHE_TTL:-3600}
+      - USE_TIMEFRAME=${USE_TIMEFRAME:-false}
+      - ENABLE_EXTRACTION=${ENABLE_EXTRACTION:-true}
+      - DEBUG=${DEBUG:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./cache:/app/cache  # Persist cache between restarts
+      - ./logs:/app/logs    # Mount logs directory
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - news-network
+
+  # Optional: Add a reverse proxy for production
+  nginx:
+    image: nginx:alpine
+    container_name: news-summarizer-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - news-summarizer
+    restart: unless-stopped
+    profiles:
+      - production
+    networks:
+      - news-network
+
+networks:
+  news-network:
+    driver: bridge
+
+volumes:
+  cache:
+    driver: local
+  logs:
+    driver: local 
