@@ -37,7 +37,7 @@ The agent uses **LangGraph** to create an intelligent workflow that:
 | Component | Technology |
 |-----------|------------|
 | **Agent Framework** | **LangGraph** (intelligent workflows) |
-| **LLM/Summarization** | HuggingFace `facebook/bart-large-cnn` |
+| **LLM/Summarization** | HuggingFace `facebook/bart-large-cnn` Transformer |
 | **News API** | TheNewsAPI |
 | **Backend API** | FastAPI |
 | **Frontend** | Streamlit |
@@ -63,6 +63,12 @@ The agent uses **LangGraph** to create an intelligent workflow that:
 2. **Install dependencies**
    ```bash
    pip install -r requirements.txt
+   ```
+
+3. **Configure environment variables**
+   ```bash
+   # Create an environment file
+   # Add your TheNewsAPI key
    ```
 
 4. **Run the application**
@@ -154,7 +160,7 @@ curl -X POST "http://localhost:8000/export/pdf" \
 
 ### Customization
 
-- **Change AI Model**: Update `MODEL_NAME` in `.env`
+- **Change AI Model**: Update `MODEL_NAME` in your env file.
 - **Adjust Cache**: Modify `CACHE_TTL` for different cache durations
 - **Language Support**: Add more languages in the Streamlit interface
 
