@@ -37,7 +37,7 @@ The agent uses **LangGraph** to create an intelligent workflow that:
 | Component | Technology |
 |-----------|------------|
 | **Agent Framework** | **LangGraph** (intelligent workflows) |
-| **LLM/Summarization** | HuggingFace `facebook/bart-large-cnn` Transformer |
+| **LLM/Summarization** | HuggingFace `facebook/bart-large-cnn` |
 | **News API** | NewsAPI.org |
 | **Backend API** | FastAPI |
 | **Frontend** | Streamlit |
