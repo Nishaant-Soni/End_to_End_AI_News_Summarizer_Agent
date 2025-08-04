@@ -190,7 +190,7 @@ def display_summary_result(result: dict):
                                 preview = text_content[:200] + "..." if len(text_content) > 200 else text_content
                                 st.markdown(f'<div class="article-card"><strong>📄 Content Preview:</strong><br/>{preview}</div>', unsafe_allow_html=True)
                             else:
-                                st.warning("⚠️ Full content requires a paid NewsData.io plan")
+                                st.warning("⚠️ Full content requires a paid Newsapi.org plan")
                 
                 with col2:
                     st.markdown("**Source:**")
@@ -217,9 +217,21 @@ def display_summary_result(result: dict):
                     st.markdown("**Stats:**")
                     original_len = article.get("original_length", 0)
                     summary_len = article.get("summary_length", 0)
-                    if original_len > 0:
-                        compression = round((1 - summary_len/original_len) * 100, 1)
-                        st.write(f"Compression: {compression}%")
+                    if original_len > 0 and summary_len > 0:
+                        # Handle cases where original content is truncated (NewsAPI limitation)
+                        text_content = article.get("text_content", "")
+                        is_truncated = "[+" in text_content and "chars]" in text_content
+                        
+                        if is_truncated:
+                            st.warning("⚠️ Original content truncated by API")
+                        else:
+                            compression = round((1 - summary_len/original_len) * 100, 1)
+                            if compression > 0:
+                                st.write(f"Compression: {compression}%")
+                            else:
+                                st.write("Summary expanded content")
+                    elif summary_len > 0:
+                        st.write(f"Summary: {summary_len} chars")
     
     # PDF download button
     if result:
@@ -278,7 +290,7 @@ def main():
                 )
             
             with col2:
-                max_articles = st.selectbox("Max Articles", list(range(1, 4)), index=2)
+                max_articles = st.selectbox("Max Articles", list(range(1, 6)), index=2)
                 language = st.selectbox("Language", ["en", "es", "fr", "de"], index=0)
             
             submitted = st.form_submit_button("🚀 Get Summary", type="primary")
@@ -432,7 +444,7 @@ def main():
             - **Backend**: FastAPI + HuggingFace
             - **Frontend**: Streamlit
             - **AI Model**: BART Large CNN
-            - **News API**: NewsData.io
+            - **News API**: Newsapi.org
             """)
             
             # Show LangGraph workflow diagram

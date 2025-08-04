@@ -31,15 +31,15 @@ app.add_middleware(
 )
 
 # Initialize the news agent
-api_key = os.getenv("THENEWSAPI_TOKEN")
+api_key = os.getenv("NEWSAPI_KEY")
 logger.info(f"API key loaded: {'Yes' if api_key else 'No'}")
 if api_key:
     logger.info(f"API key length: {len(api_key)}")
     logger.info(f"API key starts with: {api_key[:10]}...")
 
 if not api_key:
-    logger.error("THENEWSAPI_TOKEN environment variable not set")
-    raise ValueError("THENEWSAPI_TOKEN environment variable must be set")
+    logger.error("NEWSAPI_KEY environment variable not set")
+    raise ValueError("NEWSAPI_KEY environment variable must be set")
 
 model_name = os.getenv("MODEL_NAME", "facebook/bart-large-cnn")
 cache_dir = os.getenv("CACHE_DIR", "./cache")

@@ -117,7 +117,7 @@ class RelevanceFilter:
     def enhance_search_terms(self, original_topic: str) -> str:
         """Generate simplified search terms for better API compatibility"""
         
-        # For TheNewsAPI, just return the original topic
+        # For NewsAPI.org, just return the original topic
         # Complex OR queries seem to cause issues
         return original_topic
     

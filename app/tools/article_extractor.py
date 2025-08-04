@@ -12,16 +12,27 @@ import concurrent.futures
 class ArticleExtractor:
     """Tool for extracting full article content from URLs"""
     
-    def __init__(self, timeout: int = 10, max_retries: int = 2):
+    def __init__(self, timeout: int = 10, max_retries: int = 2):  # Reduced timeout
         self.timeout = timeout
         self.max_retries = max_retries
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
+        
+        # Blacklist problematic domains/patterns
+        self.blacklisted_patterns = [
+            'yahoo.com/news/videos/',  # Yahoo video pages
+            'youtube.com',
+            'tiktok.com',
+            'instagram.com',
+            'facebook.com',
+            'twitter.com',
+            'x.com'
+        ]
     
     def extract_article_content(self, url: str) -> Dict:
-        """Extract article content using multiple methods"""
+        """Extract article content using multiple methods with timeout"""
         if not url or not url.startswith('http'):
             return {
                 'success': False,
@@ -31,7 +42,18 @@ class ArticleExtractor:
                 'error': 'Invalid URL'
             }
         
-        # Try multiple extraction methods
+        # Check if URL is blacklisted
+        if self._is_blacklisted(url):
+            logger.warning(f"URL is blacklisted for extraction: {url}")
+            return {
+                'success': False,
+                'content': '',
+                'title': '',
+                'text': '',
+                'error': 'URL blacklisted for extraction'
+            }
+        
+        # Try multiple extraction methods with timeout
         methods = [
             self._extract_with_trafilatura,
             self._extract_with_newspaper,
@@ -40,10 +62,17 @@ class ArticleExtractor:
         
         for method in methods:
             try:
-                result = method(url)
-                if result['success'] and result['text'] and len(result['text'].strip()) > 100:
-                    logger.info(f"Successfully extracted content using {method.__name__}")
-                    return result
+                # Use concurrent.futures to enforce timeout
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(method, url)
+                    try:
+                        result = future.result(timeout=self.timeout)  # Strict timeout
+                        if result['success'] and result['text'] and len(result['text'].strip()) > 100:
+                            logger.info(f"Successfully extracted content using {method.__name__}: {len(result['text'])} chars")
+                            return result
+                    except concurrent.futures.TimeoutError:
+                        logger.warning(f"Method {method.__name__} timed out for {url}")
+                        continue
             except Exception as e:
                 logger.warning(f"Method {method.__name__} failed for {url}: {e}")
                 continue
@@ -53,33 +82,49 @@ class ArticleExtractor:
             'content': '',
             'title': '',
             'text': '',
-            'error': 'All extraction methods failed'
+            'error': 'All extraction methods failed or timed out'
         }
+    
+    def _is_blacklisted(self, url: str) -> bool:
+        """Check if URL matches blacklisted patterns"""
+        for pattern in self.blacklisted_patterns:
+            if pattern in url.lower():
+                return True
+        return False
     
     def _extract_with_trafilatura(self, url: str) -> Dict:
         """Extract using trafilatura (best for modern websites)"""
         try:
             logger.info(f"Trying trafilatura extraction for: {url}")
-            downloaded = trafilatura.fetch_url(url)
-            if downloaded is None:
-                logger.warning(f"Trafilatura failed to download: {url}")
-                return {'success': False, 'content': '', 'title': '', 'text': '', 'error': 'Failed to download'}
             
-            # Extract main content
-            text = trafilatura.extract(downloaded, include_formatting=True, include_links=True)
+            # Use requests with shorter timeout
+            response = self.session.get(url, timeout=self.timeout // 2)
+            if response.status_code != 200:
+                return {'success': False, 'content': '', 'title': '', 'text': '', 'error': f'HTTP {response.status_code}'}
             
-            # Safely extract metadata
+            downloaded = response.text
+            
+            # Limit response size to prevent memory issues
+            if len(downloaded) > 1_000_000:  # 1MB limit
+                logger.warning(f"Response too large ({len(downloaded)} chars), truncating")
+                downloaded = downloaded[:1_000_000]
+            
+            # Extract main content with simpler configuration (faster)
+            text = trafilatura.extract(
+                downloaded, 
+                include_formatting=False,  # Disable formatting for speed
+                include_links=False,       # Disable links for speed
+                include_images=False,      # Disable images for speed
+                include_tables=False       # Disable tables for speed
+            )
+            
+            # Simple title extraction from HTML
             title = ''
             try:
-                metadata = trafilatura.extract_metadata(downloaded)
-                if metadata and hasattr(metadata, 'get'):
-                    title = metadata.get('title', '')
-                elif metadata and isinstance(metadata, dict):
-                    title = metadata.get('title', '')
-                elif hasattr(metadata, 'title'):
-                    title = getattr(metadata, 'title', '')
-            except Exception as e:
-                logger.warning(f"Metadata extraction failed: {e}")
+                title_match = re.search(r'<title[^>]*>([^<]+)</title>', downloaded, re.IGNORECASE)
+                if title_match:
+                    title = title_match.group(1).strip()
+            except Exception:
                 title = ''
             
             if text and len(text.strip()) > 50:
@@ -102,11 +147,19 @@ class ArticleExtractor:
     def _extract_with_newspaper(self, url: str) -> Dict:
         """Extract using newspaper3k"""
         try:
+            logger.info(f"Trying newspaper extraction for: {url}")
+            
             article = Article(url)
+            article.set_config(
+                timeout=self.timeout // 2,
+                browser_user_agent=self.session.headers['User-Agent']
+            )
+            
             article.download()
             article.parse()
             
             if article.text and len(article.text.strip()) > 50:
+                logger.info(f"Newspaper successful: {len(article.text)} characters")
                 return {
                     'success': True,
                     'content': article.text,
@@ -118,6 +171,7 @@ class ArticleExtractor:
             return {'success': False, 'content': '', 'title': '', 'text': '', 'error': 'No content found'}
             
         except Exception as e:
+            logger.error(f"Newspaper exception: {e}")
             return {'success': False, 'content': '', 'title': '', 'text': '', 'error': str(e)}
     
     def _extract_with_beautifulsoup(self, url: str) -> Dict:
@@ -215,15 +269,27 @@ class ArticleExtractor:
         if not url:
             return False
         
-        # Skip certain domains that are known to block scraping
+        # Skip certain domains that are known to block scraping or cause issues
         blocked_domains = [
             'facebook.com', 'twitter.com', 'instagram.com', 'linkedin.com',
             'youtube.com', 'tiktok.com', 'reddit.com'
         ]
         
+        # Also check for problematic URL patterns
+        blocked_patterns = [
+            'yahoo.com/news/videos/',  # Yahoo video pages often hang
+            'finance.yahoo.com/video/', 
+            'news.yahoo.com/video/'
+        ]
+        
         domain = urlparse(url).netloc.lower()
         for blocked in blocked_domains:
             if blocked in domain:
+                return False
+        
+        # Check for blocked patterns        
+        for pattern in blocked_patterns:
+            if pattern in url.lower():
                 return False
         
         return True 

@@ -1,5 +1,6 @@
 import os
 import requests
+import re
 from typing import List, Dict, Optional
 from datetime import datetime
 import diskcache as dc
@@ -8,11 +9,11 @@ from .relevance_filter import RelevanceFilter
 from .article_extractor import ArticleExtractor
 
 class NewsFetcher:
-    """Tool for fetching news articles from TheNewsAPI"""
+    """Tool for fetching news articles from NewsAPI.org"""
     
     def __init__(self, api_key: str, cache_dir: str = "./cache", cache_ttl: int = 3600, use_timeframe: bool = False, enable_extraction: bool = True):
         self.api_key = api_key
-        self.base_url = "https://api.thenewsapi.com/v1/news"
+        self.base_url = "https://newsapi.org/v2"
         self.cache = dc.Cache(cache_dir)
         self.cache_ttl = cache_ttl
         self.relevance_filter = RelevanceFilter()
@@ -23,8 +24,8 @@ class NewsFetcher:
         self.article_extractor = ArticleExtractor() if enable_extraction else None
         
     def _make_request(self, endpoint: str, params: Dict) -> Dict:
-        """Make a request to TheNewsAPI with error handling"""
-        params['api_token'] = self.api_key
+        """Make a request to NewsAPI.org with error handling"""
+        params['apiKey'] = self.api_key
         
         try:
             url = f"{self.base_url}/{endpoint}"
@@ -38,11 +39,11 @@ class NewsFetcher:
                 return {"status": "error", "message": f"HTTP {response.status_code}: {response.text}"}
             
             result = response.json()
-            # TheNewsAPI returns different status structure
-            if 'error' in result:
-                return {"status": "error", "message": result.get('error', 'Unknown error')}
+            # NewsAPI.org returns status field directly
+            if result.get('status') == 'error':
+                return {"status": "error", "message": result.get('message', 'Unknown error')}
             
-            return {"status": "success", "data": result.get('data', [])}
+            return {"status": "success", "data": result.get('articles', []), "totalResults": result.get('totalResults', 0)}
         except requests.exceptions.RequestException as e:
             logger.error(f"API request failed: {e}")
             return {"status": "error", "message": str(e)}
@@ -64,22 +65,23 @@ class NewsFetcher:
         search_query = enhanced_search
 
         params = {
-            'search': search_query,  # TheNewsAPI uses 'search' parameter
+            'q': search_query,  # NewsAPI.org uses 'q' parameter
             'language': language,
-            'limit': min(max_articles * 2, 100),  # TheNewsAPI allows up to 100
+            'pageSize': min(max_articles * 2, 100),  # NewsAPI.org allows up to 100
+            'sortBy': 'relevancy',  # Sort by relevancy for better results
         }
         
         # Add date filter if enabled
         if self.use_timeframe:
             from datetime import datetime, timedelta
             yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-            params['published_after'] = yesterday
+            params['from'] = yesterday
             logger.info("Using date filter (last 24 hours)")
         else:
             logger.info("No date filter applied")
         
         logger.info(f"Fetching news for topic: {topic}")
-        response = self._make_request("all", params)
+        response = self._make_request("everything", params)
         
         if response.get("status") == "success":
             articles = self._process_articles(response.get("data", []))
@@ -107,7 +109,7 @@ class NewsFetcher:
             return []
     
     def get_trending_topics(self, language: str = "en") -> List[Dict]:
-        """Fetch trending topics using TheNewsAPI"""
+        """Fetch trending topics using NewsAPI.org"""
         cache_key = f"trending_{language}"
         
         # Check cache first
@@ -118,12 +120,12 @@ class NewsFetcher:
         
         params = {
             'language': language,
-            'limit': 20,  # Get more articles to extract topics from
-            'categories': 'general,business,technology,sports'  # Popular categories
+            'pageSize': 20,  # Get more articles to extract topics from
+            'category': 'general'  # NewsAPI.org uses singular 'category'
         }
         
         logger.info("Fetching trending topics")
-        response = self._make_request("top", params)  # TheNewsAPI uses 'top' for trending
+        response = self._make_request("top-headlines", params)  # NewsAPI.org uses 'top-headlines' for trending
         
         if response.get("status") == "success":
             articles = response.get("data", [])
@@ -137,36 +139,41 @@ class NewsFetcher:
             return []
     
     def _process_articles(self, articles: List[Dict]) -> List[Dict]:
-        """Process and filter articles from TheNewsAPI"""
+        """Process and filter articles from NewsAPI.org"""
         processed = []
         
         for article in articles:
             # Skip articles without content or description
-            if not article.get('description') and not article.get('snippet'):
+            if not article.get('description') and not article.get('content'):
                 continue
                 
             processed_article = {
                 'title': article.get('title', 'No title'),
-                'description': article.get('description', article.get('snippet', '')),
-                'content': article.get('snippet', ''),  # TheNewsAPI provides snippet
+                'description': article.get('description', ''),
+                'content': article.get('content', ''),  # NewsAPI.org provides content (truncated to 200 chars)
                 'url': article.get('url', ''),
-                'source': article.get('source', 'Unknown'),
-                'published_at': article.get('published_at', ''),
-                'image_url': article.get('image_url', ''),
-                'category': article.get('categories', [])
+                'source': article.get('source', {}).get('name', 'Unknown') if article.get('source') else 'Unknown',
+                'published_at': article.get('publishedAt', ''),
+                'image_url': article.get('urlToImage', ''),
+                'category': []  # NewsAPI.org doesn't provide categories in articles
             }
             
-            # Use snippet if available, otherwise use description
-            processed_article['text_content'] = (
-                processed_article['content'] or processed_article['description']
-            )
+            # Use content if available, otherwise use description
+            content_text = processed_article['content'] or processed_article['description']
+            
+            # Clean up truncated content indicators
+            if content_text and '[+' in content_text and 'chars]' in content_text:
+                # Remove the truncation indicator for cleaner text
+                content_text = re.sub(r'\s*\[\+\d+\s+chars\].*$', '', content_text)
+            
+            processed_article['text_content'] = content_text
             
             processed.append(processed_article)
         
         return processed
     
     def _extract_trending_topics(self, articles: List[Dict]) -> List[Dict]:
-        """Extract trending topics from latest articles (TheNewsAPI format)"""
+        """Extract trending topics from latest articles (NewsAPI.org format)"""
         topics = {}
         
         for article in articles:
@@ -191,7 +198,7 @@ class NewsFetcher:
                         topics[topic_key]['latest_article'] = {
                             'title': article.get('title', ''),
                             'url': article.get('url', ''),
-                            'published_at': article.get('published_at', '')
+                            'published_at': article.get('publishedAt', '')
                         }
         
         # Sort by count and return top topics
@@ -213,13 +220,32 @@ class NewsFetcher:
                 enhanced_articles.append(article)
                 continue
             
-            # Check if we already have good content
+            # Check if we already have good content (not truncated)
             text_content = article.get('text_content', '')
-            if text_content and len(text_content) > 200 and 'ONLY AVAILABLE IN PAID PLANS' not in text_content:
+            
+            # Detect various truncation patterns
+            has_truncation = (
+                '[+' in text_content and 'chars]' in text_content or  # NewsAPI.org pattern
+                text_content.endswith('...') or  # Common truncation
+                len(text_content) == 200 or  # NewsAPI.org exact truncation length
+                'ONLY AVAILABLE IN PAID PLANS' in text_content  # Paywall message
+            )
+            
+            # Only skip extraction if we have substantial content AND it's not truncated
+            if text_content and len(text_content) > 500 and not has_truncation:
+                logger.info(f"Skipping extraction - already have good content ({len(text_content)} chars): {url}")
                 enhanced_articles.append(article)
                 continue
             
-            # Extract content
+            # Skip problematic domains that often hang
+            problematic_domains = ['yahoo.com', 'finance.yahoo.com', 'news.yahoo.com']
+            if any(domain in url.lower() for domain in problematic_domains):
+                logger.info(f"Skipping extraction for problematic domain: {url}")
+                enhanced_articles.append(article)
+                continue
+            
+            # Extract content with timeout
+            logger.info(f"Attempting extraction for: {url}")
             extraction_result = self.article_extractor.extract_article_content(url)
             
             if extraction_result['success']:

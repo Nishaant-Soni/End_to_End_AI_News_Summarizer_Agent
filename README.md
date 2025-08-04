@@ -38,7 +38,7 @@ The agent uses **LangGraph** to create an intelligent workflow that:
 |-----------|------------|
 | **Agent Framework** | **LangGraph** (intelligent workflows) |
 | **LLM/Summarization** | HuggingFace `facebook/bart-large-cnn` Transformer |
-| **News API** | TheNewsAPI |
+| **News API** | NewsAPI.org |
 | **Backend API** | FastAPI |
 | **Frontend** | Streamlit |
 | **PDF Generation** | ReportLab |
@@ -50,7 +50,7 @@ The agent uses **LangGraph** to create an intelligent workflow that:
 ### Prerequisites
 
 1. **Python 3.9+**
-2. **TheNewsAPI API Key** - Get it free from (https://www.thenewsapi.com)
+2. **NewsAPI.org API Key** - Get it free from (https://newsapi.org)
 
 ### Local Setup
 
@@ -67,8 +67,22 @@ The agent uses **LangGraph** to create an intelligent workflow that:
 
 3. **Configure environment variables**
    ```bash
-   # Create an environment file
-   # Add your TheNewsAPI key
+   # Get your free API key from https://newsapi.org/register
+   NEWSAPI_KEY=your_api_key_here
+
+   # Model Configuration
+   MODEL_NAME=facebook/bart-large-cnn
+
+   # Cache Configuration
+   CACHE_DIR=./cache
+
+   # Optional Features
+   USE_TIMEFRAME=false
+   ENABLE_EXTRACTION=true 
+
+   # Server Configuration
+   HOST=0.0.0.0
+   PORT=8000
    ```
 
 4. **Run the application**
@@ -258,7 +272,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## 🙏 Acknowledgments
 
 - **HuggingFace** for the transformer models
-- **TheNEWSAPI** for the news API
+- **NewsAPI.org** for the news API
 - **Streamlit** for the amazing UI framework
 - **FastAPI** for the high-performance backend
 
