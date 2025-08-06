@@ -31,7 +31,7 @@ warning() {
 check_port() {
     local port=$1
     local service=$2
-    local max_attempts=30
+    local max_attempts=30  # Should be quick now with pre-cached model
     local attempt=1
     
     log "Waiting for $service to be ready on port $port..."
@@ -55,8 +55,8 @@ check_port() {
 validate_environment() {
     log "Validating environment variables..."
     
-    if [ -z "$NEWSDATA_API_KEY" ]; then
-        error "NEWSDATA_API_KEY environment variable is required"
+    if [ -z "$NEWSAPI_KEY" ]; then
+        error "NEWSAPI_KEY environment variable is required"
         exit 1
     fi
     
@@ -94,6 +94,26 @@ setup_directories() {
 start_backend() {
     log "Starting FastAPI backend..."
     
+    # First try to start backend and check for immediate errors
+    log "Testing FastAPI backend startup..."
+    
+    # Test the backend first without backgrounding to catch startup errors
+    timeout 10s uvicorn app.main:app \
+        --host "$HOST" \
+        --port "$PORT" \
+        --workers 1 \
+        --log-level info \
+        --access-log 2>&1 | head -20 &
+    
+    TEST_PID=$!
+    sleep 5
+    
+    # Kill the test process
+    kill $TEST_PID 2>/dev/null || true
+    wait $TEST_PID 2>/dev/null || true
+    
+    log "Starting FastAPI backend in background..."
+    
     # Start backend in background
     uvicorn app.main:app \
         --host "$HOST" \
@@ -106,11 +126,22 @@ start_backend() {
     BACKEND_PID=$!
     echo $BACKEND_PID > /tmp/backend.pid
     
+    # Give it a moment to start
+    sleep 2
+    
+    # Check if the process is still running
+    if ! kill -0 $BACKEND_PID 2>/dev/null; then
+        error "FastAPI backend process died immediately. Check logs:"
+        cat /tmp/backend.log 2>/dev/null || echo "No log file found"
+        exit 1
+    fi
+    
     # Wait for backend to be ready
     if check_port "$PORT" "FastAPI Backend"; then
         success "FastAPI backend started successfully (PID: $BACKEND_PID)"
     else
-        error "Failed to start FastAPI backend"
+        error "Failed to start FastAPI backend. Backend logs:"
+        cat /tmp/backend.log 2>/dev/null || echo "No log file found"
         exit 1
     fi
 }

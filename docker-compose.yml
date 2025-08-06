@@ -8,7 +8,7 @@ services:
       - "8000:8000"  # FastAPI backend
       - "8501:8501"  # Streamlit frontend
     environment:
-      - NEWSDATA_API_KEY=${NEWSDATA_API_KEY}
+      - NEWSAPI_KEY=${NEWSAPI_KEY}
       - MODEL_NAME=${MODEL_NAME:-facebook/bart-large-cnn}
       - CACHE_DIR=${CACHE_DIR:-./cache}
       - HOST=${HOST:-0.0.0.0}

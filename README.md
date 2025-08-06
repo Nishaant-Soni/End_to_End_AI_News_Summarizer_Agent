@@ -235,7 +235,7 @@ curl -X POST "http://localhost:8000/summarize" \
 ```bash
 # Build and run
 docker build -t news-summarizer .
-docker run -p 8000:8000 -p 8501:8501 -e NEWSDATA_API_KEY=your_key news-summarizer
+docker run -p 8000:8000 -p 8501:8501 -e NEWSAPI_KEY=your_key news-summarizer
 ```
 
 ### Cloud Deployment
@@ -247,7 +247,7 @@ docker run -p 8000:8000 -p 8501:8501 -e NEWSDATA_API_KEY=your_key news-summarize
 
 ## 📊 Performance
 
-- **Summarization**: ~2-5 seconds per article
+- **Summarization**: <45s for the whole pipeline
 - **Cache Hit**: <100ms response time
 - **Memory Usage**: ~2GB RAM for full model
 - **Concurrent Users**: Scales with hardware

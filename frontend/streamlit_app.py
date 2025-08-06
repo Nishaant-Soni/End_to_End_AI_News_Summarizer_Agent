@@ -241,6 +241,10 @@ def display_summary_result(result: dict):
 def main():
     """Main Streamlit application"""
     
+    # Initialize session state
+    if 'initialized' not in st.session_state:
+        st.session_state.initialized = True
+    
     # Header
     st.markdown('<h1 class="main-header">🤖 AI News Summarizer Agent</h1>', unsafe_allow_html=True)
     
